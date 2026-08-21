@@ -18,6 +18,7 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import ResultCard from './ResultCard';
+import { API_BASE_URL } from '../config/api';
 
 export default function HistoryView({ authToken, onBackToEvaluator }) {
   const [historyData, setHistoryData] = useState(null);
@@ -30,7 +31,7 @@ export default function HistoryView({ authToken, onBackToEvaluator }) {
     setIsLoading(true);
     setError('');
     try {
-      const res = await fetch('/api/history', {
+      const res = await fetch(`${API_BASE_URL}/api/history`, {
         headers: {
           'Authorization': `Bearer ${authToken}`
         }
@@ -61,7 +62,7 @@ export default function HistoryView({ authToken, onBackToEvaluator }) {
     if (!window.confirm('Are you sure you want to delete this evaluation result?')) return;
 
     try {
-      const res = await fetch(`/api/history/${id}`, {
+      const res = await fetch(`${API_BASE_URL}/api/history/${id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${authToken}`
@@ -239,7 +240,10 @@ export default function HistoryView({ authToken, onBackToEvaluator }) {
             subject={selectedResult.subject}
             answerImages={
               Array.isArray(selectedResult.image_paths) && selectedResult.image_paths.length > 0
-                ? selectedResult.image_paths.map((p, idx) => ({ id: idx, data: p }))
+                ? selectedResult.image_paths.map((p, idx) => ({
+                    id: idx,
+                    data: (p.startsWith('http') || p.startsWith('data:')) ? p : `${API_BASE_URL}${p}`
+                  }))
                 : []
             }
           />

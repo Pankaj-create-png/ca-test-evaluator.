@@ -7,6 +7,7 @@ import ApiKeyModal from './components/ApiKeyModal';
 import AuthModal from './components/AuthModal';
 import HistoryView from './components/HistoryView';
 import { AlertCircle, Sparkles, ShieldCheck, Lock } from 'lucide-react';
+import { API_BASE_URL } from './config/api';
 
 const DEFAULT_FORM_DATA = {
   subject: 'Business Laws',
@@ -55,7 +56,7 @@ export default function App() {
   // Check token validity on mount
   useEffect(() => {
     if (authToken) {
-      fetch('/api/auth/me', {
+      fetch(`${API_BASE_URL}/api/auth/me`, {
         headers: { Authorization: `Bearer ${authToken}` }
       })
         .then((res) => {
@@ -96,7 +97,7 @@ export default function App() {
   const checkHealth = async () => {
     setIsCheckingHealth(true);
     try {
-      const res = await fetch('/api/health');
+      const res = await fetch(`${API_BASE_URL}/api/health`);
       if (res.ok) {
         const data = await res.json();
         setIsServerConnected(true);
@@ -212,7 +213,7 @@ export default function App() {
         headers['x-gemini-api-key'] = apiKey.trim();
       }
 
-      const endpoint = isImageMode ? '/api/evaluate-image' : '/api/evaluate';
+      const endpoint = isImageMode ? `${API_BASE_URL}/api/evaluate-image` : `${API_BASE_URL}/api/evaluate`;
       const bodyData = isImageMode
         ? {
             subject: formData.subject,

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, Lock, Mail, User, LogIn, UserPlus, AlertCircle, Award, CheckCircle2 } from 'lucide-react';
+import { API_BASE_URL } from '../config/api';
 
 export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab = 'login' }) {
   const [tab, setTab] = useState(initialTab); // 'login' | 'signup'
@@ -49,7 +50,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab =
     setLoading(true);
 
     try {
-      const endpoint = tab === 'signup' ? '/api/auth/signup' : '/api/auth/login';
+      const endpoint = tab === 'signup' ? `${API_BASE_URL}/api/auth/signup` : `${API_BASE_URL}/api/auth/login`;
       const bodyData = tab === 'signup'
         ? { name: formData.name.trim(), email: formData.email.trim(), password: formData.password }
         : { email: formData.email.trim(), password: formData.password };
