@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# SQLite Databases & temporary files
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+ca_evaluator.db
+
+# User uploads & temp files
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# Logs & OS files
+*.log
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
