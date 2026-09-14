@@ -5,6 +5,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { buildImageSystemPrompt, buildImageUserPrompt } from '../prompts/imageEvaluatorPrompt.js';
 import { runQuery } from '../db/database.js';
+import { processAndFlattenPdfFiles } from '../utils/pdfConverter.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -178,6 +179,10 @@ router.post('/evaluate-image', async (req, res) => {
     const modelName = process.env.GEMINI_MODEL || 'gemini-3.6-flash';
     const ai = new GoogleGenAI({ apiKey });
 
+    // Flatten any uploaded PDF files into page images
+    const processedQuestionImages = await processAndFlattenPdfFiles(question_images);
+    const processedAnswerImages = await processAndFlattenPdfFiles(answer_images);
+
     // Build Multimodal Contents
     const systemPrompt = buildImageSystemPrompt();
     const userPromptText = buildImageUserPrompt({
@@ -190,9 +195,9 @@ router.post('/evaluate-image', async (req, res) => {
     contents.push({ text: userPromptText });
 
     // Attach Question Paper Images if provided
-    if (Array.isArray(question_images) && question_images.length > 0) {
+    if (Array.isArray(processedQuestionImages) && processedQuestionImages.length > 0) {
       contents.push({ text: '\n--- QUESTION PAPER IMAGES ---' });
-      question_images.forEach((img, idx) => {
+      processedQuestionImages.forEach((img, idx) => {
         contents.push({ text: `Question Paper Image #${idx + 1}:` });
         contents.push(formatInlineData(img));
       });
@@ -200,7 +205,7 @@ router.post('/evaluate-image', async (req, res) => {
 
     // Attach Answer Sheet Images
     contents.push({ text: '\n--- STUDENT HANDWRITTEN ANSWER SHEET IMAGES (In page order) ---' });
-    answer_images.forEach((img, idx) => {
+    processedAnswerImages.forEach((img, idx) => {
       contents.push({ text: `Answer Sheet Page #${idx + 1}:` });
       contents.push(formatInlineData(img));
     });
@@ -224,7 +229,7 @@ router.post('/evaluate-image', async (req, res) => {
       // Save answer images to disk
       const savedImagePaths = [];
       try {
-        answer_images.forEach((img, idx) => {
+        processedAnswerImages.forEach((img, idx) => {
           let rawData = typeof img === 'string' ? img : (img.data || img.url || '');
           let ext = 'jpg';
           if (rawData.includes('data:image/png')) ext = 'png';
