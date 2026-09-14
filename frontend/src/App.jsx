@@ -130,7 +130,7 @@ export default function App() {
     const { name, value } = e.target;
     setFormData((prev) => ({
       ...prev,
-      [name]: name === 'max_marks' ? (value === '' ? '' : Math.max(1, parseInt(value, 10) || 1)) : value
+      [name]: name === 'max_marks' ? (value === '' ? '' : Math.min(100, Math.max(1, parseInt(value, 10) || 1))) : value
     }));
   };
 
@@ -179,9 +179,10 @@ export default function App() {
     }
 
     const isImageMode = evalMode === 'image';
+    const isFullTestMode = evalMode === 'full_test';
 
     // Validation
-    if (isImageMode) {
+    if (isImageMode || isFullTestMode) {
       if (answerImages.length === 0) {
         setErrorMessage("Please upload at least one handwritten answer sheet image.");
         return;
@@ -213,8 +214,13 @@ export default function App() {
         headers['x-gemini-api-key'] = apiKey.trim();
       }
 
-      const endpoint = isImageMode ? `${API_BASE_URL}/api/evaluate-image` : `${API_BASE_URL}/api/evaluate`;
-      const bodyData = isImageMode
+      const endpoint = isFullTestMode
+        ? `${API_BASE_URL}/api/evaluate-full-test`
+        : isImageMode
+        ? `${API_BASE_URL}/api/evaluate-image`
+        : `${API_BASE_URL}/api/evaluate`;
+
+      const bodyData = (isImageMode || isFullTestMode)
         ? {
             subject: formData.subject,
             max_marks: Number(formData.max_marks) || 5,
@@ -249,7 +255,16 @@ export default function App() {
       }
 
       if (data.success && (data.evaluation || data.evaluations)) {
-        setEvaluationResult(data.evaluation);
+        const topResult = data.evaluation || (data.evaluations ? data.evaluations[0] : null);
+        // If full test, attach total summary numbers to main result object for top display
+        if (isFullTestMode) {
+          topResult.marks_awarded = data.total_marks_awarded;
+          topResult.max_marks = data.total_max_marks;
+          topResult.eval_type = 'full_test';
+          topResult.feedback = data.overall_feedback || topResult.feedback;
+        }
+
+        setEvaluationResult(topResult);
         setEvaluationsList(data.evaluations || null);
         
         // Smooth scroll to results

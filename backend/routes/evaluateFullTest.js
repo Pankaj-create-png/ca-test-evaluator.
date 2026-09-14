@@ -3,14 +3,13 @@ import { GoogleGenAI } from '@google/genai';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { buildImageSystemPrompt, buildImageUserPrompt } from '../prompts/imageEvaluatorPrompt.js';
+import { buildFullTestSystemPrompt, buildFullTestUserPrompt } from '../prompts/fullTestEvaluatorPrompt.js';
 import { runQuery } from '../db/database.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const uploadsDir = path.resolve(__dirname, '../uploads/results');
 
-// Ensure uploads directory exists
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
@@ -33,7 +32,6 @@ function formatInlineData(imgInput, defaultMime = 'image/jpeg') {
     rawData = parts[1];
   }
 
-  // Strip any remaining whitespace or newlines
   rawData = rawData.replace(/\s/g, '');
 
   return {
@@ -45,11 +43,11 @@ function formatInlineData(imgInput, defaultMime = 'image/jpeg') {
 }
 
 /**
- * Parses and sanitizes JSON response from Gemini for image evaluation.
+ * Parses and sanitizes JSON response from Gemini for full test paper evaluation.
  */
-function parseImageGeminiJson(text, fallbackMaxMarks = 5) {
+function parseFullTestGeminiJson(text) {
   if (!text) {
-    throw new Error('Empty response received from Gemini API.');
+    throw new Error('Empty response received from Gemini API for full test paper.');
   }
 
   let cleaned = text.trim();
@@ -67,6 +65,12 @@ function parseImageGeminiJson(text, fallbackMaxMarks = 5) {
   let parsed = JSON.parse(cleaned);
 
   let rawList = [];
+  let overallFeedback = '';
+
+  if (parsed.summary && parsed.summary.overall_feedback) {
+    overallFeedback = String(parsed.summary.overall_feedback);
+  }
+
   if (Array.isArray(parsed.evaluations)) {
     rawList = parsed.evaluations;
   } else if (Array.isArray(parsed)) {
@@ -76,10 +80,17 @@ function parseImageGeminiJson(text, fallbackMaxMarks = 5) {
   }
 
   const sanitizedEvaluations = rawList.map((item, idx) => {
-    const maxM = typeof item.max_marks === 'number' ? item.max_marks : (parseFloat(item.max_marks) || fallbackMaxMarks);
-    const marksAw = typeof item.marks_awarded === 'number' ? item.marks_awarded : (parseFloat(item.marks_awarded) || 0);
+    // Max marks per question can go up to 100
+    const rawMax = typeof item.max_marks === 'number' ? item.max_marks : (parseFloat(item.max_marks) || 10);
+    const maxM = Math.min(Math.max(1, rawMax), 100);
 
-    const isUnclear = Boolean(item.unclear_handwriting || (item.feedback && item.feedback.toLowerCase().includes('could not confidently read')));
+    const rawAw = typeof item.marks_awarded === 'number' ? item.marks_awarded : (parseFloat(item.marks_awarded) || 0);
+    const marksAw = Math.min(Math.max(0, rawAw), maxM);
+
+    const isUnclear = Boolean(
+      item.unclear_handwriting ||
+      (item.feedback && item.feedback.toLowerCase().includes('could not confidently read'))
+    );
 
     const rawRegions = Array.isArray(item.regions) ? item.regions : [];
     const sanitizedRegions = rawRegions
@@ -91,7 +102,6 @@ function parseImageGeminiJson(text, fallbackMaxMarks = 5) {
         const width = parseFloat(r.width);
         const height = parseFloat(r.height);
 
-        // Check if coordinates are valid floats between 0 and 1
         if (
           isNaN(x) || isNaN(y) || isNaN(width) || isNaN(height) ||
           x < 0 || x > 1 || y < 0 || y > 1 || width <= 0 || height <= 0
@@ -113,14 +123,14 @@ function parseImageGeminiJson(text, fallbackMaxMarks = 5) {
 
     return {
       question_number: item.question_number ? String(item.question_number) : `Q${idx + 1}`,
-      question_text: item.question_text ? String(item.question_text) : '',
-      max_marks: Math.min(Math.max(1, maxM), 100),
-      marks_awarded: Math.min(Math.max(0, marksAw), maxM),
+      question_text: item.question_text ? String(item.question_text) : `Question ${idx + 1}`,
+      max_marks: maxM,
+      marks_awarded: isUnclear ? 0 : marksAw,
       handwriting_transcription: item.handwriting_transcription ? String(item.handwriting_transcription) : '',
       unclear_handwriting: isUnclear,
       location: {
         page: item.location?.page ? parseInt(item.location.page, 10) : 1,
-        position: item.location?.position ? String(item.location.position) : 'Answer Sheet Page 1'
+        position: item.location?.position ? String(item.location.position) : `Answer Sheet Page ${item.location?.page || 1}`
       },
       regions: sanitizedRegions,
       correct_points: Array.isArray(item.correct_points) ? item.correct_points.map(String) : (item.correct_points ? [String(item.correct_points)] : []),
@@ -129,37 +139,36 @@ function parseImageGeminiJson(text, fallbackMaxMarks = 5) {
       icai_reference: item.icai_reference ? String(item.icai_reference) : 'ICAI CA Foundation Study Material',
       feedback: isUnclear
         ? 'Could not confidently read this answer - please retype it in the text form Column instead'
-        : (item.feedback ? String(item.feedback) : 'Evaluation completed.')
+        : (item.feedback ? String(item.feedback) : 'Question evaluation completed.')
     };
   });
 
-  return sanitizedEvaluations;
+  return {
+    evaluations: sanitizedEvaluations,
+    overall_feedback: overallFeedback
+  };
 }
 
 /**
- * POST /api/evaluate-image
- * Body: { subject, max_marks, question_text, question_images: [], answer_images: [] }
+ * POST /api/evaluate-full-test
+ * Body: { subject, question_text, question_images: [], answer_images: [] }
  */
-router.post('/evaluate-image', async (req, res) => {
+router.post('/evaluate-full-test', async (req, res) => {
   try {
-    const { subject, max_marks, question_text, question_images = [], answer_images = [] } = req.body;
+    const { subject, question_text, question_images = [], answer_images = [] } = req.body;
 
-    // Validate requirements
     if (!answer_images || !Array.isArray(answer_images) || answer_images.length === 0) {
       return res.status(400).json({
-        error: 'Please upload at least one image of the student answer sheet.'
+        error: 'Please upload at least one image of the student answer sheet for the test paper.'
       });
     }
 
     if ((!question_images || question_images.length === 0) && (!question_text || !question_text.trim())) {
       return res.status(400).json({
-        error: 'Please provide either question paper image(s) or question text.'
+        error: 'Please upload question paper image(s) or provide question details.'
       });
     }
 
-    const parsedMaxMarks = Number(max_marks) || 5;
-
-    // Determine API Key
     const apiKey = (
       req.headers['x-gemini-api-key'] ||
       req.headers['x-anthropic-api-key'] ||
@@ -178,34 +187,29 @@ router.post('/evaluate-image', async (req, res) => {
     const modelName = process.env.GEMINI_MODEL || 'gemini-3.6-flash';
     const ai = new GoogleGenAI({ apiKey });
 
-    // Build Multimodal Contents
-    const systemPrompt = buildImageSystemPrompt();
-    const userPromptText = buildImageUserPrompt({
+    const systemPrompt = buildFullTestSystemPrompt();
+    const userPromptText = buildFullTestUserPrompt({
       subject: subject || 'Business Laws',
-      question_text,
-      max_marks: parsedMaxMarks
+      question_text
     });
 
     const contents = [];
     contents.push({ text: userPromptText });
 
-    // Attach Question Paper Images if provided
     if (Array.isArray(question_images) && question_images.length > 0) {
-      contents.push({ text: '\n--- QUESTION PAPER IMAGES ---' });
+      contents.push({ text: '\n--- QUESTION PAPER IMAGES / PAGES ---' });
       question_images.forEach((img, idx) => {
-        contents.push({ text: `Question Paper Image #${idx + 1}:` });
+        contents.push({ text: `Question Paper Page #${idx + 1}:` });
         contents.push(formatInlineData(img));
       });
     }
 
-    // Attach Answer Sheet Images
-    contents.push({ text: '\n--- STUDENT HANDWRITTEN ANSWER SHEET IMAGES (In page order) ---' });
+    contents.push({ text: '\n--- STUDENT HANDWRITTEN ANSWER SHEET IMAGES / PAGES (In page order) ---' });
     answer_images.forEach((img, idx) => {
       contents.push({ text: `Answer Sheet Page #${idx + 1}:` });
       contents.push(formatInlineData(img));
     });
 
-    // Call Gemini multimodal model
     const response = await ai.models.generateContent({
       model: modelName,
       contents: contents,
@@ -219,7 +223,9 @@ router.post('/evaluate-image', async (req, res) => {
     const rawResponseText = response.text || '';
 
     try {
-      const evaluations = parseImageGeminiJson(rawResponseText, parsedMaxMarks);
+      const parsedResult = parseFullTestGeminiJson(rawResponseText);
+      const evaluations = parsedResult.evaluations;
+      const overallFeedback = parsedResult.overall_feedback;
 
       // Save answer images to disk
       const savedImagePaths = [];
@@ -235,40 +241,41 @@ router.post('/evaluate-image', async (req, res) => {
           }
           rawData = rawData.replace(/\s/g, '');
 
-          const filename = `ans_${Date.now()}_${idx + 1}.${ext}`;
+          const filename = `ans_full_${Date.now()}_${idx + 1}.${ext}`;
           const filepath = path.join(uploadsDir, filename);
           fs.writeFileSync(filepath, Buffer.from(rawData, 'base64'));
 
           savedImagePaths.push(`/uploads/results/${filename}`);
         });
       } catch (imgSaveErr) {
-        console.error('Failed to save answer image files to disk:', imgSaveErr);
+        console.error('Failed to save full test answer images to disk:', imgSaveErr);
       }
 
-      // Calculate aggregated marks & points across all evaluated questions
+      // Calculate total test metrics (uncapped total max marks)
       let totalMarksAwarded = 0;
       let totalMaxMarks = 0;
-      const primaryQuestionText = (question_text && question_text.trim()) || evaluations[0]?.question_text || 'Handwritten Answer Sheet Evaluation';
-      
       let allCorrectPoints = [];
       let allMissingPoints = [];
       let allIncorrectPoints = [];
       let primaryReference = 'ICAI CA Foundation Study Material';
-      let primaryFeedback = '';
 
       evaluations.forEach((item) => {
         totalMarksAwarded += Number(item.marks_awarded) || 0;
-        totalMaxMarks += Number(item.max_marks) || parsedMaxMarks;
+        totalMaxMarks += Number(item.max_marks) || 0;
         if (Array.isArray(item.correct_points)) allCorrectPoints.push(...item.correct_points);
         if (Array.isArray(item.missing_points)) allMissingPoints.push(...item.missing_points);
         if (Array.isArray(item.incorrect_points)) allIncorrectPoints.push(...item.incorrect_points);
-        if (item.icai_reference) primaryReference = item.icai_reference;
-        if (item.feedback && !primaryFeedback) primaryFeedback = item.feedback;
+        if (item.icai_reference && primaryReference === 'ICAI CA Foundation Study Material') {
+          primaryReference = item.icai_reference;
+        }
       });
 
-      if (totalMaxMarks === 0) totalMaxMarks = parsedMaxMarks;
+      if (totalMaxMarks === 0) totalMaxMarks = 100;
+      const percentage = Math.round((totalMarksAwarded / totalMaxMarks) * 100);
 
-      // Save result to database if user authenticated
+      const paperSummaryFeedback = overallFeedback || `Full test paper evaluation completed across ${evaluations.length} questions. Total Score: ${totalMarksAwarded}/${totalMaxMarks} (${percentage}%).`;
+
+      // Save single result to database if user authenticated
       let savedTestId = null;
       if (req.user && req.user.id) {
         try {
@@ -277,49 +284,54 @@ router.post('/evaluate-image', async (req, res) => {
                user_id, subject, question, max_marks, marks_awarded,
                correct_points, missing_points, incorrect_points, icai_reference, feedback,
                evaluations_json, annotated_image_path, eval_type
-             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'image')`,
+             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'full_test')`,
             [
               req.user.id,
               subject || 'Business Laws',
-              primaryQuestionText,
+              `Full Test Paper Evaluation (${evaluations.length} Questions)`,
               totalMaxMarks,
               totalMarksAwarded,
               JSON.stringify(allCorrectPoints),
               JSON.stringify(allMissingPoints),
               JSON.stringify(allIncorrectPoints),
               primaryReference,
-              primaryFeedback || 'Image evaluation completed.',
+              paperSummaryFeedback,
               JSON.stringify(evaluations),
               JSON.stringify(savedImagePaths)
             ]
           );
           savedTestId = dbRes.lastID;
         } catch (dbErr) {
-          console.error('Failed to save image evaluation result to DB:', dbErr);
+          console.error('Failed to save full test evaluation result to DB:', dbErr);
         }
       }
 
       return res.json({
         success: true,
         test_id: savedTestId,
+        eval_type: 'full_test',
         subject: subject || 'Business Laws',
-        max_marks: parsedMaxMarks,
+        total_max_marks: totalMaxMarks,
+        total_marks_awarded: totalMarksAwarded,
+        percentage: percentage,
+        overall_feedback: paperSummaryFeedback,
         evaluations: evaluations,
-        evaluation: evaluations[0] || null, // First evaluation item for single-question view compatibility
+        evaluation: evaluations[0] || null,
         saved_image_paths: savedImagePaths,
         usage: response.usageMetadata || null
       });
+
     } catch (parseErr) {
-      console.error('Failed to parse Gemini image evaluation response:', rawResponseText, parseErr);
+      console.error('Failed to parse Gemini full test evaluation response:', rawResponseText, parseErr);
       return res.status(502).json({
-        error: 'Failed to parse AI evaluation from handwritten answer images.',
+        error: 'Failed to parse AI evaluation for full test paper.',
         details: parseErr.message,
         raw_output: rawResponseText
       });
     }
 
   } catch (error) {
-    console.error('Error during image-based CA evaluation:', error);
+    console.error('Error during full test paper evaluation:', error);
     const errorMsg = error.message || '';
 
     if (
@@ -342,7 +354,7 @@ router.post('/evaluate-image', async (req, res) => {
     }
 
     return res.status(500).json({
-      error: error.message || 'An error occurred while evaluating the uploaded images.',
+      error: error.message || 'An error occurred while evaluating the full test paper.',
       details: error.stack || null
     });
   }

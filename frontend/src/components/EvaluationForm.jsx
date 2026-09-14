@@ -23,9 +23,10 @@ export default function EvaluationForm({
   const charCount = formData.student_answer ? formData.student_answer.length : 0;
 
   const isImageMode = evalMode === 'image';
+  const isFullTestMode = evalMode === 'full_test';
 
   // Validation logic for submit button
-  const canSubmit = isImageMode
+  const canSubmit = (isImageMode || isFullTestMode)
     ? (answerImages.length > 0 && (questionImages.length > 0 || formData.question.trim().length > 0))
     : (formData.question.trim().length > 0 && formData.student_answer.trim().length > 0);
 
@@ -37,15 +38,21 @@ export default function EvaluationForm({
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2">
             <div className="p-1.5 bg-indigo-100 text-indigo-700 rounded-lg">
-              {isImageMode ? <Camera className="w-4 h-4" /> : <FileText className="w-4 h-4" />}
+              {isFullTestMode ? <Layers className="w-4 h-4 text-purple-700" /> : isImageMode ? <Camera className="w-4 h-4" /> : <FileText className="w-4 h-4" />}
             </div>
             <div>
               <h2 className="text-sm font-bold text-slate-800">
-                {isImageMode ? 'Image-Based Answer Sheet Evaluation' : 'Typed Answer Evaluation'}
+                {isFullTestMode
+                  ? 'Full Test Paper Evaluation'
+                  : isImageMode
+                  ? 'Single Question Handwritten Evaluation'
+                  : 'Typed Answer Evaluation'}
               </h2>
               <p className="text-xs text-slate-500">
-                {isImageMode
-                  ? 'Upload images of question paper & handwritten answer sheet for AI grading'
+                {isFullTestMode
+                  ? 'Upload multiple question paper & answer sheet pages covering an entire multi-question test'
+                  : isImageMode
+                  ? 'Upload images of question paper & handwritten answer sheet for a single question'
                   : 'Type or paste the exam question and written student response'}
               </p>
             </div>
@@ -63,32 +70,45 @@ export default function EvaluationForm({
         </div>
 
         {/* Mode Selector Tabs */}
-        <div className="grid grid-cols-2 gap-2 p-1 bg-slate-200/70 rounded-xl">
+        <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-200/70 rounded-xl">
           <button
             type="button"
             onClick={() => !isLoading && onEvalModeChange('text')}
-            className={`py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center space-x-2 ${
-              !isImageMode
+            className={`py-2 px-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center space-x-1.5 ${
+              evalMode === 'text'
                 ? 'bg-white text-indigo-700 shadow-sm'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
             <FileText className="w-3.5 h-3.5" />
-            <span>Typed Text Answer</span>
+            <span className="truncate">Typed Answer</span>
           </button>
 
           <button
             type="button"
             onClick={() => !isLoading && onEvalModeChange('image')}
-            className={`py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center space-x-2 ${
-              isImageMode
+            className={`py-2 px-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center space-x-1.5 ${
+              evalMode === 'image'
                 ? 'bg-indigo-600 text-white shadow-sm'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
             <Camera className="w-3.5 h-3.5" />
-            <span>Upload Handwritten Sheet</span>
-            <span className="text-[10px] bg-amber-400 text-amber-950 font-extrabold px-1.5 py-0.5 rounded-md ml-1">
+            <span className="truncate">Single Q Sheet</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => !isLoading && onEvalModeChange('full_test')}
+            className={`py-2 px-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center space-x-1.5 ${
+              evalMode === 'full_test'
+                ? 'bg-purple-600 text-white shadow-sm'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <Layers className="w-3.5 h-3.5" />
+            <span className="truncate">Full Test Paper</span>
+            <span className="text-[9px] bg-amber-400 text-amber-950 font-extrabold px-1.5 py-0.5 rounded ml-0.5">
               NEW
             </span>
           </button>
@@ -97,14 +117,30 @@ export default function EvaluationForm({
 
       <div className="p-5 sm:p-6 space-y-5">
         
-        {/* Image Upload Component when in Image Mode */}
-        {isImageMode && (
+        {/* Full Test Mode Loading Warning Notice */}
+        {evalMode === 'full_test' && isLoading && (
+          <div className="p-3.5 rounded-xl bg-purple-50 border border-purple-200 text-purple-900 text-xs flex items-center space-x-3 animate-pulse">
+            <div className="p-1.5 bg-purple-200 text-purple-800 rounded-lg shrink-0">
+              <Layers className="w-4 h-4" />
+            </div>
+            <div>
+              <p className="font-bold">Evaluating Full Test Paper...</p>
+              <p className="text-[11px] text-purple-700">
+                Analyzing all question paper and answer sheet pages. This may take longer than a single-question evaluation.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Image Upload Component when in Image or Full Test Mode */}
+        {(evalMode === 'image' || evalMode === 'full_test') && (
           <ImageUploadForm
             questionImages={questionImages}
             onQuestionImagesChange={onQuestionImagesChange}
             answerImages={answerImages}
             onAnswerImagesChange={onAnswerImagesChange}
             isLoading={isLoading}
+            isFullTestMode={evalMode === 'full_test'}
           />
         )}
 
@@ -112,7 +148,7 @@ export default function EvaluationForm({
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           
           {/* Subject Dropdown */}
-          <div className="sm:col-span-2">
+          <div className={evalMode === 'full_test' ? 'sm:col-span-3' : 'sm:col-span-2'}>
             <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5 flex items-center justify-between">
               <span>CA Foundation Paper / Subject *</span>
               <span className="text-[10px] text-slate-400 font-normal normal-case">Select Paper</span>
@@ -134,57 +170,61 @@ export default function EvaluationForm({
             </select>
           </div>
 
-          {/* Max Marks Input */}
+          {/* Max Marks Input (Only shown for Single Question evaluation modes) */}
+          {evalMode !== 'full_test' ? (
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5 flex items-center justify-between">
+                <span>Max Marks *</span>
+                <span className="text-[10px] text-slate-400 font-normal normal-case">(1-100)</span>
+              </label>
+              <input
+                id="max-marks-input"
+                type="number"
+                name="max_marks"
+                min="1"
+                max="100"
+                step="1"
+                value={formData.max_marks}
+                onChange={onChange}
+                disabled={isLoading}
+                className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-semibold text-slate-800 text-center shadow-sm"
+                required
+              />
+            </div>
+          ) : null}
+        </div>
+
+        {/* Question Text Area (Shown for text/image mode, optional for full_test) */}
+        {evalMode !== 'full_test' && (
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5 flex items-center justify-between">
-              <span>Max Marks *</span>
-              <span className="text-[10px] text-slate-400 font-normal normal-case">(1 - 25)</span>
+              <span>
+                Exam Question {evalMode === 'image' ? '(Optional if Question Paper Image Uploaded)' : '*'}
+              </span>
+              <span className="text-[10px] text-slate-400 font-normal normal-case">
+                {evalMode === 'image' ? 'Can be extracted from image or typed here' : 'State problem statement'}
+              </span>
             </label>
-            <input
-              id="max-marks-input"
-              type="number"
-              name="max_marks"
-              min="1"
-              max="25"
-              step="1"
-              value={formData.max_marks}
+            <textarea
+              id="question-textarea"
+              name="question"
+              rows={evalMode === 'image' ? 2 : 3}
+              placeholder={
+                evalMode === 'image'
+                  ? 'Optional: Type question text if not uploading question paper image...'
+                  : 'e.g., State the essential elements of a valid contract as per Section 10 of the Indian Contract Act, 1872.'
+              }
+              value={formData.question}
               onChange={onChange}
               disabled={isLoading}
-              className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 font-semibold text-slate-800 text-center shadow-sm"
-              required
+              className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-slate-800 shadow-sm placeholder:text-slate-400 resize-y"
+              required={evalMode === 'text' && questionImages.length === 0}
             />
           </div>
-        </div>
-
-        {/* Question Text Area */}
-        <div>
-          <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5 flex items-center justify-between">
-            <span>
-              Exam Question {isImageMode ? '(Optional if Question Paper Image Uploaded)' : '*'}
-            </span>
-            <span className="text-[10px] text-slate-400 font-normal normal-case">
-              {isImageMode ? 'Can be extracted from image or typed here' : 'State problem statement'}
-            </span>
-          </label>
-          <textarea
-            id="question-textarea"
-            name="question"
-            rows={isImageMode ? 2 : 3}
-            placeholder={
-              isImageMode
-                ? 'Optional: Type question text if not uploading question paper image...'
-                : 'e.g., State the essential elements of a valid contract as per Section 10 of the Indian Contract Act, 1872.'
-            }
-            value={formData.question}
-            onChange={onChange}
-            disabled={isLoading}
-            className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-slate-800 shadow-sm placeholder:text-slate-400 resize-y"
-            required={!isImageMode && questionImages.length === 0}
-          />
-        </div>
+        )}
 
         {/* Student's Typed Answer (Only in Text Mode) */}
-        {!isImageMode && (
+        {evalMode === 'text' && (
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="text-xs font-bold uppercase tracking-wider text-slate-700">
@@ -205,7 +245,7 @@ export default function EvaluationForm({
               onChange={onChange}
               disabled={isLoading}
               className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-slate-800 shadow-sm placeholder:text-slate-400 font-sans leading-relaxed resize-y font-normal"
-              required={!isImageMode}
+              required={evalMode === 'text'}
             />
           </div>
         )}
@@ -216,7 +256,11 @@ export default function EvaluationForm({
             id="evaluate-button"
             type="submit"
             disabled={isLoading || !canSubmit}
-            className="w-full py-3.5 px-6 rounded-xl bg-gradient-to-r from-indigo-600 via-blue-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 active:scale-[0.99] text-white font-bold text-sm tracking-wide shadow-lg shadow-indigo-500/25 transition-all flex items-center justify-center space-x-2.5 disabled:opacity-50 disabled:pointer-events-none disabled:shadow-none"
+            className={`w-full py-3.5 px-6 rounded-xl text-white font-bold text-sm tracking-wide shadow-lg transition-all flex items-center justify-center space-x-2.5 disabled:opacity-50 disabled:pointer-events-none disabled:shadow-none ${
+              evalMode === 'full_test'
+                ? 'bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-700 hover:from-purple-500 hover:to-purple-600 shadow-purple-500/25'
+                : 'bg-gradient-to-r from-indigo-600 via-blue-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 shadow-indigo-500/25'
+            }`}
           >
             {isLoading ? (
               <>
@@ -225,14 +269,22 @@ export default function EvaluationForm({
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
                 </svg>
                 <span>
-                  {isImageMode ? 'Reading Images & Evaluating Handwriting...' : 'Evaluating via ICAI Marking Rubric...'}
+                  {evalMode === 'full_test'
+                    ? 'Evaluating Full Test Paper (May take longer)...'
+                    : evalMode === 'image'
+                    ? 'Reading Images & Evaluating Handwriting...'
+                    : 'Evaluating via ICAI Marking Rubric...'}
                 </span>
               </>
             ) : (
               <>
                 <Play className="w-4 h-4 fill-white" />
                 <span>
-                  {isImageMode ? 'Evaluate Handwritten Answer Sheet' : 'Evaluate Answer'}
+                  {evalMode === 'full_test'
+                    ? 'Evaluate Full Test Paper'
+                    : evalMode === 'image'
+                    ? 'Evaluate Handwritten Answer Sheet'
+                    : 'Evaluate Answer'}
                 </span>
               </>
             )}

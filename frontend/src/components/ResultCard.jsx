@@ -19,59 +19,75 @@ export default function ResultCard({ result, evaluations, maxMarks, subject, ans
   const [activeQIndex, setActiveQIndex] = useState(0);
   const [copied, setCopied] = useState(false);
 
-  // Determine current evaluation object
-  const hasMultipleQuestions = Array.isArray(evaluations) && evaluations.length > 1;
-  const allEvaluations = evaluations || (result ? [result] : []);
-  const currentResult = hasMultipleQuestions ? evaluations[activeQIndex] : (result || (evaluations ? evaluations[0] : null));
+  // Determine evaluation items
+  const allEvaluations = Array.isArray(evaluations) && evaluations.length > 0
+    ? evaluations
+    : (result?.evaluations && Array.isArray(result.evaluations) && result.evaluations.length > 0)
+    ? result.evaluations
+    : (result ? [result] : []);
+
+  const hasMultipleQuestions = allEvaluations.length > 1;
+  const currentResult = allEvaluations[activeQIndex] || allEvaluations[0] || result;
 
   if (!currentResult) return null;
 
+  // Single Question Metrics
   const marksAwarded = Number(currentResult.marks_awarded) || 0;
   const max = Number(currentResult.max_marks || maxMarks) || 5;
   const percentage = Math.round((marksAwarded / max) * 100);
   const isUnclear = Boolean(currentResult.unclear_handwriting);
+
+  // Overall Paper Total Metrics across all questions (uncapped total)
+  const totalEarned = (result && typeof result.marks_awarded === 'number' && hasMultipleQuestions)
+    ? result.marks_awarded
+    : allEvaluations.reduce((sum, q) => sum + (Number(q.marks_awarded) || 0), 0);
+
+  const totalPossible = (result && typeof result.max_marks === 'number' && hasMultipleQuestions)
+    ? result.max_marks
+    : allEvaluations.reduce((sum, q) => sum + (Number(q.max_marks) || 0), 0);
+
+  const overallPercentage = totalPossible > 0 ? Math.round((totalEarned / totalPossible) * 100) : 0;
+  const unclearCount = allEvaluations.filter((q) => q.unclear_handwriting).length;
+
+  const targetPercentage = hasMultipleQuestions ? overallPercentage : percentage;
 
   // Status color logic
   let gradeColor = 'text-emerald-600 bg-emerald-50 border-emerald-200';
   let barColor = 'bg-emerald-500';
   let gradeText = 'Exemplary Answer';
 
-  if (isUnclear) {
+  if (!hasMultipleQuestions && isUnclear) {
     gradeColor = 'text-amber-700 bg-amber-50 border-amber-300';
     barColor = 'bg-amber-500';
     gradeText = 'Unclear Handwriting Flagged';
-  } else if (percentage < 40) {
+  } else if (targetPercentage < 40) {
     gradeColor = 'text-rose-600 bg-rose-50 border-rose-200';
     barColor = 'bg-rose-500';
     gradeText = 'Needs Significant Revision (Below Passing)';
-  } else if (percentage < 60) {
+  } else if (targetPercentage < 60) {
     gradeColor = 'text-amber-600 bg-amber-50 border-amber-200';
     barColor = 'bg-amber-500';
     gradeText = 'Passing Grade - Partial Credit';
-  } else if (percentage < 80) {
+  } else if (targetPercentage < 80) {
     gradeColor = 'text-blue-600 bg-blue-50 border-blue-200';
     barColor = 'bg-blue-500';
     gradeText = 'Good Understanding';
   }
 
   const handleCopy = () => {
-    const textToCopy = `ICAI CA Evaluation Summary:
-Subject: ${subject}
-${currentResult.question_number ? `Question: ${currentResult.question_number}\n` : ''}
-Score: ${marksAwarded} / ${max} (${percentage}%)
-${currentResult.location?.page ? `Location: Page ${currentResult.location.page} (${currentResult.location.position || ''})\n` : ''}
-ICAI Reference:
-${currentResult.icai_reference || 'N/A'}
-
-Correct Points:
-${(currentResult.correct_points || []).map((p, i) => `${i + 1}. ${p}`).join('\n')}
-
-Missing Points / Scope for Marks:
-${(currentResult.missing_points || []).map((p, i) => `${i + 1}. ${p}`).join('\n')}
-
-${currentResult.incorrect_points && currentResult.incorrect_points.length > 0 ? `Incorrect Points:\n${currentResult.incorrect_points.map((p, i) => `${i + 1}. ${p}`).join('\n')}\n` : ''}
-Examiner Feedback:
-${currentResult.feedback || 'N/A'}`;
+    let textToCopy = `ICAI CA Evaluation Summary:\nSubject: ${subject}\n`;
+    if (hasMultipleQuestions) {
+      textToCopy += `Overall Score: ${totalEarned} / ${totalPossible} (${overallPercentage}%)\nQuestions Evaluated: ${allEvaluations.length}\n\n`;
+      allEvaluations.forEach((q, i) => {
+        textToCopy += `--- ${q.question_number || `Q${i + 1}`} (${q.marks_awarded}/${q.max_marks}) ---\n`;
+        textToCopy += `Feedback: ${q.feedback || 'N/A'}\n\n`;
+      });
+    } else {
+      textToCopy += `${currentResult.question_number ? `Question: ${currentResult.question_number}\n` : ''}`;
+      textToCopy += `Score: ${marksAwarded} / ${max} (${percentage}%)\n`;
+      textToCopy += `ICAI Reference: ${currentResult.icai_reference || 'N/A'}\n`;
+      textToCopy += `Feedback: ${currentResult.feedback || 'N/A'}\n`;
+    }
 
     navigator.clipboard.writeText(textToCopy);
     setCopied(true);
@@ -91,11 +107,13 @@ ${currentResult.feedback || 'N/A'}`;
               <span className="text-[11px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-500/30 text-indigo-200 border border-indigo-400/30">
                 {subject}
               </span>
-              <span className="text-xs text-slate-300">• Official ICAI Marking Assessment</span>
+              <span className="text-xs text-slate-300">
+                • {hasMultipleQuestions ? 'Full Test Paper Evaluation' : 'Official ICAI Marking Assessment'}
+              </span>
             </div>
             <h2 className="text-xl font-bold text-white flex items-center gap-2">
               <Award className="w-5 h-5 text-amber-400" />
-              Evaluation Report
+              {hasMultipleQuestions ? 'Full Test Evaluation Report' : 'Evaluation Report'}
             </h2>
           </div>
 
@@ -113,35 +131,44 @@ ${currentResult.feedback || 'N/A'}`;
         {/* Multi-Question Selector Tabs if multiple questions returned */}
         {hasMultipleQuestions && (
           <div className="mt-4 flex items-center space-x-1.5 overflow-x-auto pb-1">
-            {evaluations.map((q, idx) => (
-              <button
-                key={idx}
-                type="button"
-                onClick={() => setActiveQIndex(idx)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all shrink-0 ${
-                  activeQIndex === idx
-                    ? 'bg-amber-400 text-slate-950 shadow-sm'
-                    : 'bg-white/10 text-slate-300 hover:bg-white/20'
-                }`}
-              >
-                {q.question_number || `Q${idx + 1}`} ({q.marks_awarded}/{q.max_marks})
-              </button>
-            ))}
+            {allEvaluations.map((q, idx) => {
+              const qNum = q.question_number || `Q${idx + 1}`;
+              const qEarned = Number(q.marks_awarded) || 0;
+              const qMax = Number(q.max_marks) || 5;
+              const qUnclear = Boolean(q.unclear_handwriting);
+
+              return (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => setActiveQIndex(idx)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all shrink-0 flex items-center space-x-1.5 ${
+                    activeQIndex === idx
+                      ? 'bg-amber-400 text-slate-950 shadow-sm'
+                      : 'bg-white/10 text-slate-300 hover:bg-white/20'
+                  }`}
+                >
+                  <span>{qNum}</span>
+                  <span className="font-mono text-[11px]">({qEarned}/{qMax})</span>
+                  {qUnclear && <span className="w-2 h-2 rounded-full bg-amber-400" title="Unclear Handwriting"></span>}
+                </button>
+              );
+            })}
           </div>
         )}
 
-        {/* Score Metric Card */}
+        {/* Score Metric Card (Overall Test Summary if Multi-Q, or Single Q metric) */}
         <div className="mt-5 p-4 rounded-xl bg-slate-800/80 border border-slate-700/80 grid grid-cols-1 sm:grid-cols-3 gap-4 items-center">
           <div className="sm:col-span-2">
-            <div className="flex items-baseline space-x-2">
+            <div className="flex items-baseline space-x-2 flex-wrap gap-y-1">
               <span className="text-3xl font-extrabold tracking-tight text-white">
-                {marksAwarded}
+                {hasMultipleQuestions ? totalEarned : marksAwarded}
               </span>
               <span className="text-lg font-semibold text-slate-400">
-                / {max} Marks
+                / {hasMultipleQuestions ? totalPossible : max} Marks
               </span>
               <span className={`ml-2 text-xs font-bold px-2.5 py-0.5 rounded-full border ${gradeColor}`}>
-                {percentage}% Score
+                {targetPercentage}% {hasMultipleQuestions ? 'Total Score' : 'Score'}
               </span>
             </div>
 
@@ -149,19 +176,47 @@ ${currentResult.feedback || 'N/A'}`;
             <div className="mt-2.5 w-full bg-slate-700 rounded-full h-2 overflow-hidden">
               <div
                 className={`h-full ${barColor} transition-all duration-500 rounded-full`}
-                style={{ width: `${Math.min(Math.max(percentage, 5), 100)}%` }}
+                style={{ width: `${Math.min(Math.max(targetPercentage, 5), 100)}%` }}
               ></div>
             </div>
           </div>
 
           <div className="sm:border-l sm:border-slate-700 sm:pl-4">
-            <p className="text-[11px] uppercase tracking-wider text-slate-400 font-semibold">Assessment Verdict</p>
+            <p className="text-[11px] uppercase tracking-wider text-slate-400 font-semibold">
+              {hasMultipleQuestions ? 'Full Paper Verdict' : 'Assessment Verdict'}
+            </p>
             <p className="text-xs font-medium text-slate-200 mt-0.5">{gradeText}</p>
+            {hasMultipleQuestions && (
+              <p className="text-[10px] text-slate-400 mt-1">
+                {allEvaluations.length} Questions Evaluated
+                {unclearCount > 0 ? ` • ${unclearCount} Flagged` : ''}
+              </p>
+            )}
           </div>
         </div>
       </div>
 
       <div className="p-6 space-y-6">
+
+        {/* Active Question Info Banner when multi-question view */}
+        {hasMultipleQuestions && currentResult && (
+          <div className="p-4 rounded-xl bg-purple-50 border border-purple-200 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-purple-900 flex items-center space-x-1.5">
+                <FileSearch className="w-3.5 h-3.5 text-purple-700" />
+                <span>Selected Breakdown: {currentResult.question_number || `Q${activeQIndex + 1}`}</span>
+              </span>
+              <span className="text-xs font-bold text-purple-950 font-mono">
+                {marksAwarded} / {max} Marks
+              </span>
+            </div>
+            {currentResult.question_text && (
+              <p className="text-xs text-purple-950 font-medium leading-relaxed">
+                "{currentResult.question_text}"
+              </p>
+            )}
+          </div>
+        )}
 
         {/* Annotated Canvas Answer Sheet Viewer (If Answer Sheet Images Uploaded) */}
         {answerImages && answerImages.length > 0 && (

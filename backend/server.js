@@ -5,6 +5,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import evaluateRouter from './routes/evaluate.js';
 import evaluateImageRouter from './routes/evaluateImage.js';
+import evaluateFullTestRouter from './routes/evaluateFullTest.js';
 import authRouter from './routes/auth.js';
 import historyRouter from './routes/history.js';
 import { authenticateToken } from './middleware/authMiddleware.js';
@@ -57,6 +58,9 @@ app.use('/api', evaluateRouter);
 
 app.post('/api/evaluate-image', authenticateToken);
 app.use('/api', evaluateImageRouter);
+
+app.post('/api/evaluate-full-test', authenticateToken);
+app.use('/api', evaluateFullTestRouter);
 
 // 404 Handler
 app.use((req, res) => {

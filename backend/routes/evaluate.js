@@ -62,8 +62,8 @@ router.post('/evaluate', async (req, res) => {
     }
 
     const parsedMaxMarks = Number(max_marks);
-    if (isNaN(parsedMaxMarks) || parsedMaxMarks <= 0) {
-      return res.status(400).json({ error: 'Max marks must be a positive number.' });
+    if (isNaN(parsedMaxMarks) || parsedMaxMarks <= 0 || parsedMaxMarks > 100) {
+      return res.status(400).json({ error: 'Max marks must be a positive number between 1 and 100.' });
     }
 
     // Determine API Key (from header if provided from UI, or environment variable)

@@ -6,6 +6,7 @@ import {
   Calendar,
   FileText,
   Image as ImageIcon,
+  Layers,
   ChevronRight,
   TrendingUp,
   Trash2,
@@ -273,6 +274,7 @@ export default function HistoryView({ authToken, onBackToEvaluator }) {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {filteredResults.map((item) => {
                 const percentage = item.percentage || 0;
+                const isFullTest = item.eval_type === 'full_test';
                 const isImage = item.eval_type === 'image';
                 const formattedDate = new Date(item.created_at).toLocaleDateString('en-US', {
                   month: 'short',
@@ -299,8 +301,8 @@ export default function HistoryView({ authToken, onBackToEvaluator }) {
                           {item.subject}
                         </span>
                         <span className="inline-flex items-center space-x-1 text-[10px] font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">
-                          {isImage ? <ImageIcon className="w-3 h-3 text-indigo-600" /> : <FileText className="w-3 h-3 text-slate-600" />}
-                          <span>{isImage ? 'Handwritten Image' : 'Typed Answer'}</span>
+                          {isFullTest ? <Layers className="w-3 h-3 text-purple-600" /> : isImage ? <ImageIcon className="w-3 h-3 text-indigo-600" /> : <FileText className="w-3 h-3 text-slate-600" />}
+                          <span>{isFullTest ? 'Full Test Paper' : isImage ? 'Handwritten Image' : 'Typed Answer'}</span>
                         </span>
                       </div>
 

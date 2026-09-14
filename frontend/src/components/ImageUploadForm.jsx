@@ -6,7 +6,8 @@ export default function ImageUploadForm({
   onQuestionImagesChange,
   answerImages,
   onAnswerImagesChange,
-  isLoading
+  isLoading,
+  isFullTestMode = false
 }) {
   const qInputRef = useRef(null);
   const aInputRef = useRef(null);
@@ -76,10 +77,10 @@ export default function ImageUploadForm({
               1
             </span>
             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800">
-              Question Paper Image(s)
+              {isFullTestMode ? 'Question Paper Image(s) / Pages *' : 'Question Paper Image(s)'}
             </h3>
             <span className="text-[10px] bg-slate-200 text-slate-700 px-2 py-0.5 rounded-full font-medium">
-              Optional if text typed below
+              {isFullTestMode ? 'Upload all test paper pages' : 'Optional if text typed below'}
             </span>
           </div>
           {questionImages.length > 0 && (
