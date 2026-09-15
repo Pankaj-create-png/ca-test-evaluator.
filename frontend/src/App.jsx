@@ -255,13 +255,16 @@ export default function App() {
       }
 
       if (data.success && (data.evaluation || data.evaluations)) {
-        const topResult = data.evaluation || (data.evaluations ? data.evaluations[0] : null);
+        let topResult = data.evaluation ? { ...data.evaluation } : (data.evaluations ? { ...data.evaluations[0] } : null);
         // If full test, attach total summary numbers to main result object for top display
-        if (isFullTestMode) {
-          topResult.marks_awarded = data.total_marks_awarded;
-          topResult.max_marks = data.total_max_marks;
-          topResult.eval_type = 'full_test';
-          topResult.feedback = data.overall_feedback || topResult.feedback;
+        if (isFullTestMode && topResult) {
+          topResult = {
+            ...topResult,
+            marks_awarded: data.total_marks_awarded,
+            max_marks: data.total_max_marks,
+            eval_type: 'full_test',
+            feedback: data.overall_feedback || topResult.feedback
+          };
         }
 
         setEvaluationResult(topResult);

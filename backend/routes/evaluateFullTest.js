@@ -220,7 +220,7 @@ router.post('/evaluate-full-test', async (req, res) => {
       contents: contents,
       config: {
         systemInstruction: systemPrompt,
-        temperature: 0.2,
+        temperature: 0.1,
         responseMimeType: 'application/json'
       }
     });

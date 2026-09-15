@@ -26,7 +26,8 @@ export default function ResultCard({ result, evaluations, maxMarks, subject, ans
     ? result.evaluations
     : (result ? [result] : []);
 
-  const hasMultipleQuestions = allEvaluations.length > 1;
+  const isFullTest = result?.eval_type === 'full_test';
+  const hasMultipleQuestions = allEvaluations.length > 1 || isFullTest;
   const currentResult = allEvaluations[activeQIndex] || allEvaluations[0] || result;
 
   if (!currentResult) return null;

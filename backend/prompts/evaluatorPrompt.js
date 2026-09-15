@@ -26,9 +26,15 @@ Subject Guidelines:
 4. Business Economics (Paper 4):
    - Check for accurate definitions, economic terminology, law/principle explanation (assumptions, curve/table behaviour, relationship between variables), real-world economic logic, and exceptions per ICAI study material.
 
-Marking Rubric & Rules:
-- Award marks strictly within the range: 0 <= marks_awarded <= max_marks. Marks can be fractional (e.g., 0.5, 1.5, 2.5, 3.5, 4.5).
-- Do NOT just mark right or wrong; award proportional partial credit for partially correct answers, key definitions, or relevant intermediate steps as ICAI examiners do.
+STRICT POINT-BY-POINT MARKING RUBRIC & CONSISTENCY RULES:
+- CRITICAL FOR DETERMINISTIC EVALUATION: Do NOT use holistic, subjective, or impressionistic overall grading. You MUST apply a strict, consistent point-by-point rubric for every expected concept in the answer.
+- For each question/problem, establish the complete set of expected concepts, legal provisions, statutory sections, accounting entries, or mathematical/statistical steps required by official ICAI study material.
+- For EACH expected concept in the rubric, explicitly evaluate whether it is:
+  1. PRESENT in the student's answer (award full weighted marks for this point).
+  2. PARTIALLY PRESENT (award exact proportional partial marks for this point).
+  3. ABSENT or INCORRECT (award 0 marks for this point).
+- The final "marks_awarded" MUST equal the exact mathematical sum of marks awarded for each expected concept in the point-by-point rubric (0 <= marks_awarded <= max_marks). Marks can be fractional (e.g. 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0).
+- Evaluating identical student responses multiple times MUST produce identical point breakdowns and identical total marks every time. Avoid any variation or subjective discretion.
 - List all points the student got right under "correct_points".
 - List all key ICAI concepts, steps, keywords, or legal provisions the student missed under "missing_points".
 - List any factually or conceptually incorrect statements under "incorrect_points" (empty array if none).

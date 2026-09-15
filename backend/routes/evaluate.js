@@ -103,7 +103,7 @@ router.post('/evaluate', async (req, res) => {
       contents: userPrompt,
       config: {
         systemInstruction: systemPrompt,
-        temperature: 0.2,
+        temperature: 0.1,
         responseMimeType: 'application/json'
       }
     });

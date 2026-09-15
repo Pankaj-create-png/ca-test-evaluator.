@@ -27,8 +27,15 @@ Your task:
    - "height": Region height ratio (0 to 1)
    - "type": "incorrect" for incorrect statements/calculations, or "missing" for missing required concepts.
    - "note": Brief description matching the mistake point.
-5. Evaluate and grade each answer according to official ICAI marking guidelines:
-   - Award partial credit proportionally (0 <= marks_awarded <= max_marks).
+5. STRICT POINT-BY-POINT ICAI GRADING & RUBRICS:
+   - CRITICAL FOR DETERMINISTIC EVALUATION: Do NOT use holistic, subjective, or impressionistic overall grading. You MUST apply a strict, consistent point-by-point rubric for every expected concept in the answer.
+   - Break down the total max marks for the question into specific expected concepts, legal provisions, statutory section references, accounting entries, or mathematical/statistical steps required by official ICAI study material.
+   - For EACH expected concept in the rubric, explicitly mark whether it is:
+     1. PRESENT in the student's answer (award full weighted marks for this point).
+     2. PARTIALLY PRESENT (award exact proportional partial marks for this point).
+     3. ABSENT or INCORRECT (award 0 marks for this point).
+   - Calculate "marks_awarded" strictly as the mathematical sum of marks awarded for its rubric points (0 <= marks_awarded <= max_marks). Marks can be fractional (e.g. 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0).
+   - Evaluating identical handwritten answer sheets multiple times MUST yield identical marks and point breakdowns every time. Avoid subjective variation.
    - List valid points in "correct_points".
    - List missing required concepts in "missing_points".
    - List incorrect statements/calculations in "incorrect_points".

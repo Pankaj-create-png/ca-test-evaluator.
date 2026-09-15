@@ -38,14 +38,20 @@ Your task:
    - "height": Height ratio (0.0 to 1.0)
    - "note": Brief description matching the mistake point.
 
-5. ICAI GRADING & RUBRICS PER QUESTION:
-   - Grade each question independently.
-   - Award partial credit proportionally (0 <= marks_awarded <= max_marks). Marks can be fractional (e.g. 0.5, 1.5, 3.5, 7.5, 14.5).
-   - "correct_points": List of points the student got right.
-   - "missing_points": Key ICAI concepts, steps, or section references missed.
-   - "incorrect_points": Factually or conceptually incorrect statements (empty array if none).
+5. STRICT POINT-BY-POINT ICAI GRADING & RUBRICS PER QUESTION:
+   - CRITICAL FOR DETERMINISTIC EVALUATION: Do NOT use holistic, subjective, or overall impressionistic grading. You MUST apply a strict, consistent point-by-point rubric for EACH question independently.
+   - Break down each question's max marks into specific expected concepts, legal provisions, statutory section references, accounting entries, or mathematical/statistical steps required by official ICAI study material.
+   - For EACH expected concept in the question's rubric, explicitly mark whether it is:
+     1. PRESENT in the student's answer (award full weighted marks for this point).
+     2. PARTIALLY PRESENT (award exact proportional partial marks for this point).
+     3. ABSENT or INCORRECT (award 0 marks for this point).
+   - Calculate "marks_awarded" for each question strictly as the mathematical sum of marks awarded for its rubric points (0 <= marks_awarded <= max_marks). Marks can be fractional (e.g. 0.5, 1.5, 3.5, 7.5, 14.5).
+   - Evaluating identical test papers multiple times MUST yield identical question-by-question marks and total test scores every time. Avoid subjective discretion or arbitrary score variations.
+   - "correct_points": List of points the student got right for this question.
+   - "missing_points": Key ICAI concepts, steps, or section references missed for this question.
+   - "incorrect_points": Factually or conceptually incorrect statements for this question (empty array if none).
    - "icai_reference": Specific chapter/unit/section reference from official ICAI CA Foundation study material.
-   - "feedback": Concise 1-2 sentence examiner recommendation.
+   - "feedback": Concise 1-2 sentence examiner recommendation for this question.
 
 6. OVERALL TEST SUMMARY:
    - Provide an overall examiner summary feedback statement for the entire test paper performance in "overall_feedback".
