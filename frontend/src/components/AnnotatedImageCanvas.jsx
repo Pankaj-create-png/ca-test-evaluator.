@@ -16,10 +16,51 @@ const AnnotatedImageCanvas = forwardRef(function AnnotatedImageCanvas(
 ) {
   const canvasRef = useRef(null);
   const containerRef = useRef(null);
+  const pageListRef = useRef(null);
+  const pageButtonRefs = useRef([]);
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
   const [showAnnotations, setShowAnnotations] = useState(true);
   const [imageLoaded, setImageLoaded] = useState(false);
   const [naturalSize, setNaturalSize] = useState({ width: 0, height: 0 });
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  // Check scroll position of page selector list
+  const checkScrollOverflow = React.useCallback(() => {
+    const el = pageListRef.current;
+    if (!el) return;
+    const { scrollLeft, scrollWidth, clientWidth } = el;
+    setCanScrollLeft(scrollLeft > 4);
+    setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 4);
+  }, []);
+
+  useEffect(() => {
+    checkScrollOverflow();
+    window.addEventListener('resize', checkScrollOverflow);
+    return () => window.removeEventListener('resize', checkScrollOverflow);
+  }, [answerImages.length, checkScrollOverflow]);
+
+  // Auto-scroll selected page button into view when currentPageIndex changes
+  useEffect(() => {
+    const targetButton = pageButtonRefs.current[currentPageIndex];
+    if (targetButton && pageListRef.current) {
+      targetButton.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest',
+        inline: 'center'
+      });
+    }
+    const timer = setTimeout(checkScrollOverflow, 300);
+    return () => clearTimeout(timer);
+  }, [currentPageIndex, checkScrollOverflow]);
+
+  const scrollPageList = (direction) => {
+    const el = pageListRef.current;
+    if (!el) return;
+    const scrollAmount = direction === 'left' ? -180 : 180;
+    el.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+    setTimeout(checkScrollOverflow, 300);
+  };
 
   // Gather regions for current page (1-based index matching currentPageIndex + 1)
   const regionsForPage = React.useMemo(() => {
@@ -244,42 +285,88 @@ const AnnotatedImageCanvas = forwardRef(function AnnotatedImageCanvas(
 
       {/* Pagination Controls if multi-page */}
       {answerImages.length > 1 && (
-        <div className="px-4 py-2 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between text-xs">
-          <div className="flex items-center space-x-1">
-            {answerImages.map((_, idx) => (
+        <div className="px-3 py-2 bg-slate-950/90 border-b border-slate-800 flex items-center justify-between gap-2 text-xs select-none">
+          
+          {/* Previous Page Button */}
+          <button
+            type="button"
+            disabled={currentPageIndex === 0}
+            onClick={() => setCurrentPageIndex((prev) => Math.max(0, prev - 1))}
+            className="inline-flex items-center space-x-1 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-slate-200 text-xs font-semibold disabled:opacity-30 disabled:pointer-events-none transition-all shrink-0 border border-slate-700/60 shadow-xs"
+            title="Previous Page"
+            aria-label="Previous Page"
+          >
+            <ChevronLeft className="w-4 h-4" />
+            <span className="hidden sm:inline">Prev</span>
+          </button>
+
+          {/* Horizontally Scrollable Page Selector Container */}
+          <div className="relative flex-1 min-w-0 flex items-center">
+            
+            {/* Scroll Left Indicator Arrow */}
+            {canScrollLeft && (
               <button
-                key={idx}
                 type="button"
-                onClick={() => setCurrentPageIndex(idx)}
-                className={`px-2.5 py-1 rounded text-xs font-mono font-bold transition-all ${
-                  currentPageIndex === idx
-                    ? 'bg-amber-400 text-slate-950'
-                    : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-                }`}
+                onClick={() => scrollPageList('left')}
+                className="absolute left-0 z-10 p-1 bg-slate-900/90 hover:bg-slate-800 text-slate-300 rounded-r-md border-r border-y border-slate-700 shadow-md transition-all"
+                title="Scroll Left"
               >
-                Page {idx + 1}
+                <ChevronLeft className="w-3.5 h-3.5" />
               </button>
-            ))}
+            )}
+
+            {/* Scrollable Row of Page Buttons */}
+            <div
+              ref={pageListRef}
+              onScroll={checkScrollOverflow}
+              className="flex-1 flex items-center space-x-1.5 overflow-x-auto scroll-smooth py-1 px-1.5 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-slate-900"
+              style={{
+                scrollbarWidth: 'thin',
+                scrollbarColor: '#334155 #0f172a'
+              }}
+            >
+              {answerImages.map((_, idx) => (
+                <button
+                  key={idx}
+                  ref={(el) => (pageButtonRefs.current[idx] = el)}
+                  type="button"
+                  onClick={() => setCurrentPageIndex(idx)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all shrink-0 border whitespace-nowrap ${
+                    currentPageIndex === idx
+                      ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-md scale-105'
+                      : 'bg-slate-800/80 text-slate-300 hover:bg-slate-700 border-slate-700/70 hover:text-white'
+                  }`}
+                >
+                  Page {idx + 1}
+                </button>
+              ))}
+            </div>
+
+            {/* Scroll Right Indicator Arrow */}
+            {canScrollRight && (
+              <button
+                type="button"
+                onClick={() => scrollPageList('right')}
+                className="absolute right-0 z-10 p-1 bg-slate-900/90 hover:bg-slate-800 text-slate-300 rounded-l-md border-l border-y border-slate-700 shadow-md transition-all"
+                title="Scroll Right"
+              >
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
 
-          <div className="flex items-center space-x-1">
-            <button
-              type="button"
-              disabled={currentPageIndex === 0}
-              onClick={() => setCurrentPageIndex((prev) => Math.max(0, prev - 1))}
-              className="p-1 rounded bg-slate-800 text-slate-300 hover:bg-slate-700 disabled:opacity-30 disabled:pointer-events-none"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <button
-              type="button"
-              disabled={currentPageIndex === answerImages.length - 1}
-              onClick={() => setCurrentPageIndex((prev) => Math.min(answerImages.length - 1, prev + 1))}
-              className="p-1 rounded bg-slate-800 text-slate-300 hover:bg-slate-700 disabled:opacity-30 disabled:pointer-events-none"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
+          {/* Next Page Button */}
+          <button
+            type="button"
+            disabled={currentPageIndex === answerImages.length - 1}
+            onClick={() => setCurrentPageIndex((prev) => Math.min(answerImages.length - 1, prev + 1))}
+            className="inline-flex items-center space-x-1 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-slate-200 text-xs font-semibold disabled:opacity-30 disabled:pointer-events-none transition-all shrink-0 border border-slate-700/60 shadow-xs"
+            title="Next Page"
+            aria-label="Next Page"
+          >
+            <span className="hidden sm:inline">Next</span>
+            <ChevronRight className="w-4 h-4" />
+          </button>
         </div>
       )}
 
