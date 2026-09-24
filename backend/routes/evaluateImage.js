@@ -6,6 +6,8 @@ import { fileURLToPath } from 'url';
 import { buildImageSystemPrompt, buildImageUserPrompt } from '../prompts/imageEvaluatorPrompt.js';
 import { runQuery } from '../db/database.js';
 import { processAndFlattenPdfFiles } from '../utils/pdfConverter.js';
+import { callGeminiWithRetry, getGeminiErrorStatus, isTransientGeminiError } from '../utils/geminiHelper.js';
+import { evaluationQueue } from '../utils/requestQueue.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -210,16 +212,18 @@ router.post('/evaluate-image', async (req, res) => {
       contents.push(formatInlineData(img));
     });
 
-    // Call Gemini multimodal model
-    const response = await ai.models.generateContent({
-      model: modelName,
-      contents: contents,
-      config: {
-        systemInstruction: systemPrompt,
-        temperature: 0.1,
-        responseMimeType: 'application/json'
-      }
-    });
+    // Call Gemini multimodal API with request queue, retries & backoff
+    const response = await evaluationQueue.enqueue(() =>
+      callGeminiWithRetry(ai, {
+        model: modelName,
+        contents: contents,
+        config: {
+          systemInstruction: systemPrompt,
+          temperature: 0.1,
+          responseMimeType: 'application/json'
+        }
+      })
+    );
 
     const rawResponseText = response.text || '';
 
@@ -324,14 +328,17 @@ router.post('/evaluate-image', async (req, res) => {
     }
 
   } catch (error) {
-    console.error('Error during image-based CA evaluation:', error);
+    const status = getGeminiErrorStatus(error);
     const errorMsg = error.message || '';
 
+    console.error(`[Evaluate Image API Error] Request failed. Status: ${status || 'N/A'}, Message: "${errorMsg}"`, error);
+
     if (
-      error.status === 400 && (errorMsg.includes('API_KEY_INVALID') || errorMsg.includes('API key not valid')) ||
-      error.status === 401 ||
-      error.status === 403 ||
-      errorMsg.includes('PERMISSION_DENIED')
+      status === 401 ||
+      status === 403 ||
+      (status === 400 && (errorMsg.includes('API_KEY_INVALID') || errorMsg.includes('API key not valid'))) ||
+      errorMsg.includes('PERMISSION_DENIED') ||
+      errorMsg.includes('API_KEY_INVALID')
     ) {
       return res.status(401).json({
         error: 'Invalid Gemini API Key. Please verify your API key in backend/.env or UI settings.',
@@ -339,15 +346,16 @@ router.post('/evaluate-image', async (req, res) => {
       });
     }
 
-    if (error.status === 429 || errorMsg.includes('RESOURCE_EXHAUSTED') || errorMsg.includes('quota')) {
-      return res.status(429).json({
-        error: 'Gemini API rate limit exceeded or quota exhausted. Please try again shortly.',
-        code: 'RATE_LIMIT'
+    if (status === 503 || status === 429 || isTransientGeminiError(error)) {
+      return res.status(503).json({
+        error: 'The AI service is currently busy. Please wait a moment and try again.',
+        code: 'SERVICE_BUSY',
+        details: errorMsg
       });
     }
 
     return res.status(500).json({
-      error: error.message || 'An error occurred while evaluating the uploaded images.',
+      error: errorMsg || 'An error occurred while evaluating the uploaded images.',
       details: error.stack || null
     });
   }

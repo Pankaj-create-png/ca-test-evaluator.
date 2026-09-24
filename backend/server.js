@@ -19,6 +19,13 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Request timeout middleware (180s = 3 minutes)
+app.use((req, res, next) => {
+  req.setTimeout(180000);
+  res.setTimeout(180000);
+  next();
+});
+
 // Middleware
 app.use(cors({
   origin: '*',
@@ -74,7 +81,7 @@ app.use((err, req, res, next) => {
 });
 
 // Start Server
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   const isConfigured = Boolean(
     (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim() !== '') ||
     (process.env.GOOGLE_API_KEY && process.env.GOOGLE_API_KEY.trim() !== '')
@@ -87,3 +94,9 @@ app.listen(PORT, () => {
   console.log(`  Gemini Key: ${isConfigured ? 'Configured in .env' : 'Not set in .env (can pass via UI/Header)'}`);
   console.log(`===========================================`);
 });
+
+// Set generous socket timeouts for long evaluation processing (180s)
+server.timeout = 180000;
+server.keepAliveTimeout = 180000;
+server.headersTimeout = 190000;
+

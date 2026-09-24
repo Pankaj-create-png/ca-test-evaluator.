@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { GoogleGenAI } from '@google/genai';
 import { buildSystemPrompt, buildUserPrompt } from '../prompts/evaluatorPrompt.js';
 import { runQuery } from '../db/database.js';
+import { callGeminiWithRetry, getGeminiErrorStatus, isTransientGeminiError } from '../utils/geminiHelper.js';
+import { evaluationQueue } from '../utils/requestQueue.js';
 
 const router = Router();
 
@@ -97,16 +99,18 @@ router.post('/evaluate', async (req, res) => {
       student_answer: student_answer.trim()
     });
 
-    // Call Gemini generateContent API
-    const response = await ai.models.generateContent({
-      model: modelName,
-      contents: userPrompt,
-      config: {
-        systemInstruction: systemPrompt,
-        temperature: 0.1,
-        responseMimeType: 'application/json'
-      }
-    });
+    // Call Gemini API with request queuing, retries & backoff
+    const response = await evaluationQueue.enqueue(() =>
+      callGeminiWithRetry(ai, {
+        model: modelName,
+        contents: userPrompt,
+        config: {
+          systemInstruction: systemPrompt,
+          temperature: 0.1,
+          responseMimeType: 'application/json'
+        }
+      })
+    );
 
     const rawResponseText = response.text || '';
 
@@ -161,15 +165,16 @@ router.post('/evaluate', async (req, res) => {
       });
     }
   } catch (error) {
-    console.error('Error during CA evaluation:', error);
-
+    const status = getGeminiErrorStatus(error);
     const errorMsg = error.message || '';
+
+    console.error(`[Evaluate API Error] Request failed. Status: ${status || 'N/A'}, Message: "${errorMsg}"`, error);
 
     // Handle Gemini-specific API errors
     if (
-      error.status === 400 && (errorMsg.includes('API_KEY_INVALID') || errorMsg.includes('API key not valid')) ||
-      error.status === 401 ||
-      error.status === 403 ||
+      status === 401 ||
+      status === 403 ||
+      (status === 400 && (errorMsg.includes('API_KEY_INVALID') || errorMsg.includes('API key not valid'))) ||
       errorMsg.includes('PERMISSION_DENIED') ||
       errorMsg.includes('API_KEY_INVALID')
     ) {
@@ -179,15 +184,16 @@ router.post('/evaluate', async (req, res) => {
       });
     }
 
-    if (error.status === 429 || errorMsg.includes('RESOURCE_EXHAUSTED') || errorMsg.includes('quota')) {
-      return res.status(429).json({
-        error: 'Gemini API rate limit exceeded or quota exhausted. Please try again shortly.',
-        code: 'RATE_LIMIT'
+    if (status === 503 || status === 429 || isTransientGeminiError(error)) {
+      return res.status(503).json({
+        error: 'The AI service is currently busy. Please wait a moment and try again.',
+        code: 'SERVICE_BUSY',
+        details: errorMsg
       });
     }
 
     return res.status(500).json({
-      error: error.message || 'An unexpected error occurred while evaluating the answer.',
+      error: errorMsg || 'An unexpected error occurred while evaluating the answer.',
       details: error.stack || null
     });
   }

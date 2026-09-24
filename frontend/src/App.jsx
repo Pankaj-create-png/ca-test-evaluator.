@@ -235,11 +235,25 @@ export default function App() {
             student_answer: formData.student_answer.trim()
           };
 
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(bodyData)
-      });
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 180000); // 180 seconds generous timeout
+
+      let res;
+      try {
+        res = await fetch(endpoint, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(bodyData),
+          signal: controller.signal
+        });
+      } catch (fetchErr) {
+        if (fetchErr.name === 'AbortError') {
+          throw new Error('The evaluation request timed out after 3 minutes. The AI service took too long to process. Please try again.');
+        }
+        throw fetchErr;
+      } finally {
+        clearTimeout(timeoutId);
+      }
 
       const data = await res.json();
 
@@ -251,7 +265,10 @@ export default function App() {
           handleLogout();
           setIsAuthModalOpen(true);
         }
-        throw new Error(data.error || 'Failed to evaluate response.');
+        const errObj = new Error(data.error || 'Failed to evaluate response.');
+        if (data.details) errObj.details = data.details;
+        if (data.code) errObj.code = data.code;
+        throw errObj;
       }
 
       if (data.success && (data.evaluation || data.evaluations)) {
@@ -359,7 +376,7 @@ export default function App() {
                   >
                     Log In Now
                   </button>
-                ) : errorMessage.toLowerCase().includes('api key') && (
+                ) : errorMessage.toLowerCase().includes('api key') ? (
                   <button
                     type="button"
                     onClick={() => setIsKeyModalOpen(true)}
@@ -367,7 +384,16 @@ export default function App() {
                   >
                     Set API Key
                   </button>
-                )}
+                ) : (errorMessage.toLowerCase().includes('busy') || errorMessage.toLowerCase().includes('try again')) ? (
+                  <button
+                    type="button"
+                    onClick={(e) => handleSubmitEvaluation(e)}
+                    disabled={isLoading}
+                    className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-semibold shrink-0 disabled:opacity-50"
+                  >
+                    {isLoading ? 'Retrying...' : 'Retry Evaluation'}
+                  </button>
+                ) : null}
               </div>
             )}
 

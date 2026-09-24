@@ -1,5 +1,3 @@
-import pdf2img from 'pdf-img-convert';
-
 /**
  * Converts a PDF file (base64 string, data URI, or buffer) into an array of page images.
  * Each page is rendered as a PNG image formatted for Gemini API multimodal input.
@@ -9,6 +7,14 @@ import pdf2img from 'pdf-img-convert';
  */
 export async function convertPdfToImages(pdfInput) {
   try {
+    let pdf2img;
+    try {
+      const module = await import('pdf-img-convert');
+      pdf2img = module.default || module;
+    } catch (importErr) {
+      throw new Error('PDF conversion library (pdf-img-convert) is not available in this environment. Please upload image files (JPG/PNG).');
+    }
+
     let rawData = typeof pdfInput === 'string' ? pdfInput : (pdfInput.data || pdfInput.url || '');
     
     if (rawData.includes(';base64,')) {
